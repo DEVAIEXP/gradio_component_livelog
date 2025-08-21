@@ -36,7 +36,7 @@
     // -------------------------------------------------------------------------
 
     /** Holds the current state of the progress bar. */
-    let progress = { visible: true, current: 0, total: 100, desc: "", percentage: 0, rate: 0.0, status: "running" };
+    let progress = { visible: true, current: 0, total: 100, desc: "", percentage: 0, rate: 0.0, status: "running", rate_unit: 'it/s', extra_info:''};
     /** Accumulates all received log lines. */
     let log_lines: { level: string; content: string }[] = [];
     /** A plain text representation of all logs for the utility buttons. */
@@ -66,12 +66,14 @@
         if (value !== null) {
             clearTimeout(debounceTimeout);
             debounceTimeout = setTimeout(async () => {
-                if (value === null) {
-                    // A `null` value is the signal to clear the component's state.
-                    log_lines = [];
-                    progress = { visible: false, current: 0, total: 100, desc: "", percentage: 0, rate: 0.0, status: "running" };
+                if (value === null) {                    
+                    log_lines = [];                    
+                    progress = { 
+                        visible: false, current: 0, total: 100, desc: "", percentage: 0, 
+                        rate: 0.0, status: "running", rate_unit: 'it/s', extra_info: '' 
+                    };
                     all_logs_as_text = "";
-                    initial_desc = "Processing..."; // Reset the initial description
+                    initial_desc = "Processing...";
                 } else if (value) {
                     if (Array.isArray(value)) {
                         // Handles an initial state load if the backend provides a full list.
@@ -84,39 +86,38 @@
                                 progress.visible = true;
                                 progress.current = item.current;
                                 progress.total = item.total || 100;
-                                // Capture the initial fixed description on the first progress update.
                                 if (item.current === 0 && item.desc && initial_desc === "Processing...") {
                                     initial_desc = item.desc;
                                 }
-                                // In 'progress' mode, use the latest log as the description; otherwise, use the fixed one.
                                 progress.desc = display_mode === "progress" && log_lines.length > 0 
                                     ? log_lines[log_lines.length - 1].content 
                                     : initial_desc;
-                                progress.rate = item.rate || 0.0;
+                                progress.rate = item.rate || 0.0;                              
+                                progress.rate_unit = item.rate_unit || 'it/s';
+                                progress.extra_info = item.extra_info || '';
                                 progress.percentage = progress.total > 0 ? ((item.current / progress.total) * 100) : 0;
                                 progress.status = item.status || "running";
                             }
                         }
-                    } else if (typeof value === 'object' && value.type) {
-                        // This is the primary streaming case: handles a single new data object.
+                    } else if (typeof value === 'object' && value.type) {                        
                         if (value.type === "log") {
                             log_lines = [...log_lines, { level: value.level || 'INFO', content: value.content }];
                         } else if (value.type === "progress") {
                             progress.visible = true;
                             progress.current = value.current;
                             progress.total = value.total || 100;
-                            // Capture the initial fixed description on the first progress update.
                             if (value.current === 0 && value.desc && initial_desc === "Processing...") {
                                 initial_desc = value.desc;
                             }
-                            // In 'progress' mode, use the latest log as the description; otherwise, use the fixed one.
                             progress.desc = display_mode === "progress" && log_lines.length > 0 
                                 ? log_lines[log_lines.length - 1].content 
                                 : initial_desc;
-                            progress.rate = value.rate || 0.0;
-                            progress.percentage = progress.total > 0 ? ((value.current / progress.total) * 100) : 0;
+                            progress.rate = value.rate || 0.0;                            
+                            progress.rate_unit = value.rate_unit || 'it/s';
+                            progress.extra_info = value.extra_info || '';
+                            progress.percentage = progress.total > 0 ? ((value.current / value.total) * 100) : 0;
                             progress.status = value.status || "running";
-                            // The backend can send a full log history with a progress update.
+                            
                             log_lines = Array.isArray(value.logs) ? value.logs.map(log => ({
                                 level: log.level || 'INFO',
                                 content: log.content
@@ -125,8 +126,8 @@
                     }
                     all_logs_as_text = log_lines.map(l => l.content).join('\n');
                 }
-                await tick(); // Ensure the DOM is updated before the next potential operation.
-            }, 50); // 50ms debounce window.
+                await tick();
+            }, 50);
         }
     }
 
@@ -166,7 +167,12 @@
         <div class="progress-container">
             <div class="progress-label-top">
                 <span>{progress.desc}</span>
-                <span>{progress.rate.toFixed(1)} it/s</span> 
+                 <span class="rate-info">
+                    {progress.rate.toFixed(2)} {progress.rate_unit}
+                    {#if progress.extra_info}
+                        <span class="extra-info">({progress.extra_info})</span>
+                    {/if}
+                </span> 
             </div>
             <div class="progress-bar-background">
                 <!-- Conditionally apply CSS classes based on the progress status. -->
@@ -281,5 +287,18 @@
     }
     .progress-bar-fill.error {
         background-color: var(--color-error, #ef4444);
+    }
+    .rate-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5ch;
+    }
+    .extra-info {
+        color: var(--body-text-color-subdued); 
+        font-size: 0.9em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
     }
 </style>
